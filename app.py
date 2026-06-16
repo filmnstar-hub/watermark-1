@@ -143,24 +143,56 @@ if st.button('✅ 워터마크 저장', type='primary', use_container_width=True
         base_name = pdf_file.name.replace('.pdf', '').replace('.PDF', '')
         today = datetime.now().strftime('%Y%m%d')
 
-        st.info(f'수신자 {len(recips)}명 처리 중...')
         progress = st.progress(0)
+        status = st.empty()
 
+        results = []
         for i, recip in enumerate(recips):
+            status.info(f'처리 중… {recip} ({i+1}/{len(recips)})')
             result = apply_watermark(
                 pdf_bytes, recip, sub_text,
                 font, size, angle, opacity, color_rgb, mode, layer_val
             )
             safe = recip.replace('/', '-').replace('\\', '-')
             fname = f'{base_name}_[{safe}]_{today}.pdf'
-
-            st.download_button(
-                label=f'⬇️ {fname}',
-                data=result,
-                file_name=fname,
-                mime='application/pdf',
-                key=f'dl_{i}'
-            )
+            results.append((fname, result))
             progress.progress((i + 1) / len(recips))
 
-        st.success(f'✅ {len(recips)}명 처리 완료!')
+        status.empty()
+        progress.empty()
+        st.success(f'✅ {len(recips)}명 처리 완료! 아래 버튼으로 다운로드하세요.')
+
+        if len(results) == 1:
+            # 1명: PDF 직접 다운로드
+            fname, data = results[0]
+            st.download_button(
+                label=f'⬇️ {fname} 다운로드',
+                data=data,
+                file_name=fname,
+                mime='application/pdf',
+            )
+        else:
+            # 여러 명: ZIP으로 묶어서 다운로드
+            import zipfile
+            zip_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for fname, data in results:
+                    zf.writestr(fname, data)
+            zip_buf.seek(0)
+            zip_name = f'{base_name}_워터마크_{today}.zip'
+            st.download_button(
+                label=f'⬇️ 전체 ZIP 다운로드 ({len(results)}명)',
+                data=zip_buf.read(),
+                file_name=zip_name,
+                mime='application/zip',
+            )
+            # 개별 다운로드도 제공
+            with st.expander('개별 파일 다운로드'):
+                for fname, data in results:
+                    st.download_button(
+                        label=f'⬇️ {fname}',
+                        data=data,
+                        file_name=fname,
+                        mime='application/pdf',
+                        key=fname
+                    )
